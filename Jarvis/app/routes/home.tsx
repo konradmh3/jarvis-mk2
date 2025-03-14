@@ -1,5 +1,5 @@
 import type { Route } from "./+types/home";
-import { Orb } from "../orb/orb";
+import { OrbSocket } from "../orb/orb";
 // import { Welcome } from "../welcome/welcome";
 
 export function meta({}: Route.MetaArgs) {
@@ -10,5 +10,5 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function Home() {
-  return <Orb />;
+  return <OrbSocket />;
 }

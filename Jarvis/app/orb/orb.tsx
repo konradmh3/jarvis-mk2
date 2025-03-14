@@ -1,17 +1,31 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useWebSocket from "~/hooks/useWebSocket";
 
-export function Orb() {
-    const [data, setData] = useState("");
+export function OrbSocket() {
+    // here we will connect to websocket on ws:://localhost:8080
+    const { messages, sendMessage} = useWebSocket("ws://localhost:8080");
+    const [input, setInput] = useState("");
+    
 
-    useEffect(() => {
-        fetch("http://localhost:5000")
-            .then((res) => res.json())
-            .then((data) => setData(data.message))
-            .catch((err) => console.error(err));
-    }, []);
 
+    const handleSendMessage = () => {
+        if (input.trim()) {
+            sendMessage(input);
+            setInput("");
+        }
+    };
 
     return (
-        <div>{data || "Loading..."}</div>
+        <div>{messages || "Loading..."}
+        {/* button to call funcntion */}
+        <button style={{marginLeft: "10px", cursor: "pointer"}} onClick={handleSendMessage}>Send Message</button>
+        <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a message..."
+            style={{marginLeft: "10px"}}
+        />
+        </div>
     );
 }
