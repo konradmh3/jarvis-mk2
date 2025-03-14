@@ -3,7 +3,7 @@ import useWebSocket from "~/hooks/useWebSocket";
 
 export function OrbSocket() {
     // here we will connect to websocket on ws:://localhost:8080
-    const { messages, sendMessage} = useWebSocket("ws://localhost:8080");
+    const { messages, sendMessage} = useWebSocket("ws://localhost:8083");
     const [input, setInput] = useState("");
     
 
