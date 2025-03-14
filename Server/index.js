@@ -55,4 +55,3 @@ ws.on("message", function incoming(message) {
     console.log("Transcript: ", serverEvent.transcript);
   }
 });
-OPENAI_API_KEY="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"
