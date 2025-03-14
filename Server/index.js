@@ -43,7 +43,7 @@ ws.on("message", function incoming(message) {
       "-f",
       "s16le",
       "-ar",
-      "16k",
+      "24000",
       "-ac",
       "1",
       "-i",
