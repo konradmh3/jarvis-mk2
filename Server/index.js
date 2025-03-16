@@ -17,6 +17,15 @@ const wsOpenAI = new WebSocket(url, {
 wsOpenAI.on("open", function open() {
   // here we can add code to run when we connect to the openAI websocket
   console.log("Connected to OpenAI Websocket.");
+  // update session voice settings
+  const event = {
+    type: "session.update",
+    session: {
+      voice: "verse",
+      // echo is decent too
+    },
+  };
+  wsOpenAI.send(JSON.stringify(event));
 });
 
 wsOpenAI.on("message", function incoming(message) {
