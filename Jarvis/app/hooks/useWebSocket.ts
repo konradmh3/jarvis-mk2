@@ -6,10 +6,15 @@ const useWebSocket = (url: string) => {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const audioQueue = useRef<Float32Array[]>([]); // Persist audio queue without re-rendering
+  const [isRecording, setIsRecording] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
   const startStreaming = useCallback(() => {
     if (!audioContext) {
-      const newAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      const newAudioContext = new (window.AudioContext ||
+        (window as any).webkitAudioContext)({
         sampleRate: 24000, // Match WebSocket audio sample rate
       });
       setAudioContext(newAudioContext);
@@ -17,33 +22,60 @@ const useWebSocket = (url: string) => {
     setIsStreaming(true);
   }, [audioContext]);
 
-  const playAudio = useCallback((chunk: Float32Array) => {
-    if (!audioContext) return;
+  const startRecording = async () => {
+    console.log("Start Recording");
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // log mic name
+    audioStreamRef.current = stream;
 
-    // Create an AudioBuffer for the chunk
-    const audioBuffer = audioContext.createBuffer(1, chunk.length, 24000);
-    audioBuffer.copyToChannel(chunk, 0);
+    const mediaRecorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = mediaRecorder;
 
-    // Ensure AudioContext is running
-    if (audioContext.state === "suspended") {
-      audioContext.resume();
-    }
-
-    // Play the audio and schedule the next chunk when the current one finishes
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-
-    // After the current chunk finishes, play the next one in the queue
-    source.onended = () => {
-      audioQueue.current.shift(); // Remove the played chunk from the queue
-      if (audioQueue.current.length > 0) {
-        playAudio(audioQueue.current[0]); // Play next chunk in queue
-      }
+    mediaRecorder.ondataavailable = (event) => {
+      sendAudioChunk(event.data);
     };
 
-    source.start();
-  }, [audioContext]);
+    mediaRecorder.start(250); // Send audio every 100ms
+    setIsRecording(true);
+  };
+
+  const stopRecording = () => {
+    console.log("Stop Recording");
+    mediaRecorderRef.current?.stop();
+    audioStreamRef.current?.getTracks().forEach((track) => track.stop());
+    setIsRecording(false);
+  };
+
+  const playAudio = useCallback(
+    (chunk: Float32Array) => {
+      if (!audioContext) return;
+
+      // Create an AudioBuffer for the chunk
+      const audioBuffer = audioContext.createBuffer(1, chunk.length, 24000);
+      audioBuffer.copyToChannel(chunk, 0);
+
+      // Ensure AudioContext is running
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+
+      // Play the audio and schedule the next chunk when the current one finishes
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+
+      // After the current chunk finishes, play the next one in the queue
+      source.onended = () => {
+        audioQueue.current.shift(); // Remove the played chunk from the queue
+        if (audioQueue.current.length > 0) {
+          playAudio(audioQueue.current[0]); // Play next chunk in queue
+        }
+      };
+
+      source.start();
+    },
+    [audioContext]
+  );
 
   useEffect(() => {
     console.log("Running use effect");
@@ -56,7 +88,10 @@ const useWebSocket = (url: string) => {
     ws.onmessage = async (event) => {
       const parsedData = JSON.parse(event.data);
 
-      if (parsedData.type === "response.open" || parsedData.type === "response.transcript") {
+      if (
+        parsedData.type === "response.open" ||
+        parsedData.type === "response.transcript"
+      ) {
         setMessages((prev) => [...prev, parsedData.message]);
       }
 
@@ -66,12 +101,14 @@ const useWebSocket = (url: string) => {
         try {
           // Decode base64 PCM16 audio data
           const base64String = parsedData.delta;
-          const binaryData = Uint8Array.from(atob(base64String), (c) => c.charCodeAt(0));
+          const binaryData = Uint8Array.from(atob(base64String), (c) =>
+            c.charCodeAt(0)
+          );
 
           // Convert PCM16 to Float32 properly
           const float32Array = new Float32Array(binaryData.length / 2);
           for (let i = 0; i < binaryData.length; i += 2) {
-            let sample = (binaryData[i] | (binaryData[i + 1] << 8)); // Little-endian PCM16
+            let sample = binaryData[i] | (binaryData[i + 1] << 8); // Little-endian PCM16
             if (sample >= 32768) sample -= 65536; // Convert unsigned to signed
             float32Array[i / 2] = sample / 32768.0; // Normalize between -1.0 and 1.0
           }
@@ -107,13 +144,78 @@ const useWebSocket = (url: string) => {
     };
   }, [url, audioContext, isStreaming, playAudio]);
 
-  const sendMessage = useCallback((message: string) => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(message);
-    }
-  }, [socket]);
+  ////////////////////////////////////////////////////////////////////////////////
+  ////////////////////// the following section processes and  ////////////////////
+  ////////////////////// sends base64encoded pcm16 data to ws ////////////////////
+  ////////////////////////////////////////////////////////////////////////////////
 
-  return { messages, sendMessage, startStreaming };
+  // Converts Float32Array of audio data to PCM16 ArrayBuffer
+  function floatTo16BitPCM(float32Array: Float32Array): ArrayBuffer {
+    const buffer = new ArrayBuffer(float32Array.length * 2);
+    const view = new DataView(buffer);
+    let offset = 0;
+    for (let i = 0; i < float32Array.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, float32Array[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+    return buffer;
+  }
+
+  // Converts a Float32Array to base64-encoded PCM16 data
+  function base64EncodeAudio(float32Array: Float32Array): string {
+    const arrayBuffer = floatTo16BitPCM(float32Array);
+    let binary = "";
+    let bytes = new Uint8Array(arrayBuffer);
+    const chunkSize = 0x8000; // 32KB chunk size
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      let chunk = bytes.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    return btoa(binary);
+  }
+
+  // Converts and sends blob as Float32Array of audio data to the base64encoded function
+const sendAudioChunk = function (blob: Blob) {
+  const reader = new FileReader();
+  reader.onload = function () {
+    const buffer = reader.result as ArrayBuffer;
+    const remainder = buffer.byteLength % 4;
+
+    // If not a multiple of 4, trim the buffer to the nearest multiple of 4
+    const paddedBuffer = remainder === 0 ? buffer : buffer.slice(0, buffer.byteLength - remainder);
+
+    // Create a Float32Array from the padded buffer
+    const audioData = new Float32Array(paddedBuffer);
+    const base64Data = base64EncodeAudio(audioData);
+    console.log("base64Data: ", base64Data);
+    
+    // if (socket && socket.readyState === WebSocket.OPEN) {
+    //   socket.send(JSON.stringify({
+    //     type: "request.audio.chunk",
+    //     delta: base64Data,
+    //   }));
+    // }
+  };
+  reader.readAsArrayBuffer(blob);
+};
+
+
+  const sendMessage = useCallback(
+    (message: string) => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(message);
+      }
+    },
+    [socket]
+  );
+
+  return {
+    messages,
+    startRecording,
+    stopRecording,
+    sendMessage,
+    startStreaming,
+  };
 };
 
 export default useWebSocket;
