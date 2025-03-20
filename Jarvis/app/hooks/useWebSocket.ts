@@ -34,8 +34,8 @@ const useWebSocket = (url: string) => {
     mediaRecorder.ondataavailable = (event) => {
       sendAudioChunk(event.data);
     };
-
-    mediaRecorder.start(250); // Send audio every 100ms
+  // Send audio every 150ms
+    mediaRecorder.start(1000);
     setIsRecording(true);
   };
 
@@ -44,6 +44,10 @@ const useWebSocket = (url: string) => {
     mediaRecorderRef.current?.stop();
     audioStreamRef.current?.getTracks().forEach((track) => track.stop());
     setIsRecording(false);
+    const clientEvent = {
+      type: "input_audio_buffer.commit"
+    };
+    socket?.send(JSON.stringify(clientEvent));
   };
 
   const playAudio = useCallback(
@@ -189,12 +193,13 @@ const sendAudioChunk = function (blob: Blob) {
     const base64Data = base64EncodeAudio(audioData);
     console.log("base64Data: ", base64Data);
     
-    // if (socket && socket.readyState === WebSocket.OPEN) {
-    //   socket.send(JSON.stringify({
-    //     type: "request.audio.chunk",
-    //     delta: base64Data,
-    //   }));
-    // }
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      const clientEvent = {
+        type: "input_audio_buffer.append",
+        audio: base64Data,
+      };
+      socket.send(JSON.stringify(clientEvent));
+    }
   };
   reader.readAsArrayBuffer(blob);
 };
@@ -203,7 +208,15 @@ const sendAudioChunk = function (blob: Blob) {
   const sendMessage = useCallback(
     (message: string) => {
       if (socket && socket.readyState === WebSocket.OPEN) {
-        socket.send(message);
+        const clientEvent = {
+          type: "response.create",
+          response: {
+            modalities: ["text", "audio"],
+            instructions: message,
+          },
+        };
+          console.log("clientEvent: ", clientEvent);
+          socket.send(JSON.stringify(clientEvent));
       }
     },
     [socket]

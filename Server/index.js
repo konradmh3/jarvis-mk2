@@ -2,6 +2,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import fs from "fs";
 import { spawn } from "child_process";
+import { parse } from "path";
 
 ///////////// WEBSOCKET FOR CONNECTING TO OPENAI API //////////////
 const url =
@@ -30,6 +31,8 @@ wsOpenAI.on("open", function open() {
 
 wsOpenAI.on("message", function incoming(message) {
   const serverEvent = JSON.parse(message);
+  console.log("Received message from OpenAI: ", serverEvent);
+
   if (serverEvent.type === "response.audio.delta") {
     const audioEvent = {
       type: "response.audio.chunk",
@@ -60,6 +63,17 @@ wsOpenAI.on("message", function incoming(message) {
   }
 });
 
+wsOpenAI.on("close", function close() {
+  console.log("Open AI Websocket disconnected.");
+}
+);
+
+
+wsOpenAI.on("error", function error(err) {
+  console.error("OpenAI Websocket error: ", err);
+}
+);
+
 ///////////// WEBSOCKET FOR CONNECTING TO CLIENT //////////////
 
 const wsClient = new WebSocketServer({ port: 8083 });
@@ -73,16 +87,10 @@ wsClient.on("connection", function connection(ws) {
   ws.send(JSON.stringify(wsClientEvent));
   // use ws.send to send data to client
 
-  ws.on("message", function incoming(message) {
-    const event = {
-      type: "response.create",
-      response: {
-        modalities: ["audio", "text"],
-        instructions: message.toString(),
-      },
-    };
-    console.log(event.response.instructions);
-    wsOpenAI.send(JSON.stringify(event));
+  ws.on("message", function incoming(clientEvent) {
+    const parsedEvent = JSON.parse(clientEvent);
+    console.log("Received Event from client: ", parsedEvent.type);
+    wsOpenAI.send(JSON.stringify(parsedEvent));
   });
 
   ws.on("close", () => {
