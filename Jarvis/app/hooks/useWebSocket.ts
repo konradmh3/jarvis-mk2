@@ -8,8 +8,8 @@ const useWebSocket = (url: string) => {
   const audioQueue = useRef<Float32Array[]>([]); // Persist audio queue without re-rendering
   const [isRecording, setIsRecording] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-
   const audioStreamRef = useRef<MediaStream | null>(null);
+
 
   const startStreaming = useCallback(() => {
     if (!audioContext) {
@@ -22,13 +22,32 @@ const useWebSocket = (url: string) => {
     setIsStreaming(true);
   }, [audioContext]);
 
+  const sendMessage = useCallback(
+    (message: string) => {
+      if (socket && socket.readyState === WebSocket.OPEN) {
+        const clientEvent = {
+          type: "response.create",
+          response: {
+            modalities: ["text", "audio"],
+            instructions: message,
+          },
+        };
+          console.log("clientEvent: ", clientEvent);
+          socket.send(JSON.stringify(clientEvent));
+      }
+    },
+    [socket]
+  );
+
   const startRecording = async () => {
     console.log("Start Recording");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     // log mic name
     audioStreamRef.current = stream;
 
-    const mediaRecorder = new MediaRecorder(stream);
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: "audio/webm;codecs=pcm",
+    });
     mediaRecorderRef.current = mediaRecorder;
 
     mediaRecorder.ondataavailable = (event) => {
@@ -43,11 +62,11 @@ const useWebSocket = (url: string) => {
     console.log("Stop Recording");
     mediaRecorderRef.current?.stop();
     audioStreamRef.current?.getTracks().forEach((track) => track.stop());
-    setIsRecording(false);
-    const clientEvent = {
-      type: "input_audio_buffer.commit"
-    };
-    socket?.send(JSON.stringify(clientEvent));
+    // setIsRecording(false);
+    // const clientEvent = {
+    //   type: "input_audio_buffer.commit"
+    // };
+    // socket?.send(JSON.stringify(clientEvent));
   };
 
   const playAudio = useCallback(
@@ -81,6 +100,7 @@ const useWebSocket = (url: string) => {
     [audioContext]
   );
 
+  ////////////////////Connect to websocket and handle incoming messages/////////////////////
   useEffect(() => {
     console.log("Running use effect");
     if (!audioContext || !isStreaming) return;
@@ -103,7 +123,7 @@ const useWebSocket = (url: string) => {
         console.log("Audio chunk received");
 
         try {
-          // Decode base64 PCM16 audio data
+          // Decode base64 PCM16 audio data from the WebSocket message
           const base64String = parsedData.delta;
           const binaryData = Uint8Array.from(atob(base64String), (c) =>
             c.charCodeAt(0)
@@ -168,6 +188,7 @@ const useWebSocket = (url: string) => {
   // Converts a Float32Array to base64-encoded PCM16 data
   function base64EncodeAudio(float32Array: Float32Array): string {
     const arrayBuffer = floatTo16BitPCM(float32Array);
+    console.log("arrayBuffer: ", arrayBuffer);
     let binary = "";
     let bytes = new Uint8Array(arrayBuffer);
     const chunkSize = 0x8000; // 32KB chunk size
@@ -190,6 +211,7 @@ const sendAudioChunk = function (blob: Blob) {
 
     // Create a Float32Array from the padded buffer
     const audioData = new Float32Array(paddedBuffer);
+    console.log("audioData: ", audioData);
     const base64Data = base64EncodeAudio(audioData);
     console.log("base64Data: ", base64Data);
     
@@ -204,23 +226,6 @@ const sendAudioChunk = function (blob: Blob) {
   reader.readAsArrayBuffer(blob);
 };
 
-
-  const sendMessage = useCallback(
-    (message: string) => {
-      if (socket && socket.readyState === WebSocket.OPEN) {
-        const clientEvent = {
-          type: "response.create",
-          response: {
-            modalities: ["text", "audio"],
-            instructions: message,
-          },
-        };
-          console.log("clientEvent: ", clientEvent);
-          socket.send(JSON.stringify(clientEvent));
-      }
-    },
-    [socket]
-  );
 
   return {
     messages,

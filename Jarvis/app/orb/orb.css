@@ -1,0 +1,50 @@
+.connect-button {
+    position:absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 1px solid white;
+    cursor: pointer;
+    border-radius: 2.5px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+.send-text-button {
+    margin-left: 10px;
+    border: 1px solid white;
+    cursor: pointer;
+    border-radius: 2.5px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+.record-button {
+    margin-left: 10px;
+    border: 1px solid white;
+    cursor: pointer;
+    border-radius: 2.5px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+.stop-record-button {
+    margin-left: 10px;
+    border: 1px solid white;
+    cursor: pointer;
+    border-radius: 2.5px;
+    padding-left: 5px;
+    padding-right: 5px;
+}
+.text-input-container {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+.disabled{
+    display: none;
+}
