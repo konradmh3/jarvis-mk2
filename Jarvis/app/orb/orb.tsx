@@ -13,10 +13,12 @@ export function OrbSocket() {
   } = useWebSocket("ws://localhost:8083");
   const [input, setInput] = useState("");
   const [connected, setConnected] = useState(false);
+  const [messagesSent, setMessagesSent] = useState<string[]>([])
 
   const handleSendMessage = () => {
     if (input.trim()) {
       sendMessage(input);
+      setMessagesSent([...messagesSent, input]);
       setInput("");
     }
   };
@@ -29,8 +31,15 @@ export function OrbSocket() {
 
   return (
     <div>
-      {messages || "Loading..."}
-      {/* button to call funcntion */}
+        {messages.map((message, index) => (
+        <div key={index} className="sever-message">
+          Jarvis: {message}
+          <div className="client-message">
+            {messagesSent[index]? `${messagesSent[index]} :You` : ""}
+        </div>
+        </div>
+        
+      ))}
 
       <button className={!connected ? "connect-button": "connect-button disabled"} onClick={connect}>
         Connect
@@ -49,6 +58,7 @@ export function OrbSocket() {
           Stop
         </button>
         <input
+          className="text-input"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}

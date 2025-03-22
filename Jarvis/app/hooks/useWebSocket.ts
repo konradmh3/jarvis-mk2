@@ -25,10 +25,10 @@ const useWebSocket = (url: string) => {
   const sendMessage = useCallback(
     (message: string) => {
       if (socket && socket.readyState === WebSocket.OPEN) {
+        // the following event will get split into conversation event and response event, 
+        // response event gives guidlines to how the rospnse should be as well as requests a response:
         const clientEvent = {
-          type: "response.create",
           response: {
-            modalities: ["text", "audio"],
             instructions: message,
           },
         };

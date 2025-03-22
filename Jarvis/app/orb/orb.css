@@ -48,3 +48,10 @@
 .disabled{
     display: none;
 }
+.text-input{
+    padding-left: 5px;
+    padding-right: 5px;
+}
+.client-message{
+    text-align: right;
+}
